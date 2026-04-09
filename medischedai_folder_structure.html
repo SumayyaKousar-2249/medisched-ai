@@ -1,0 +1,353 @@
+
+<style>
+  :root { --indent: 20px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-mono); font-size: 13px; }
+  .tree { padding: 1rem 0; }
+  .node { cursor: pointer; user-select: none; }
+  .node-row { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 4px; transition: background .12s; }
+  .node-row:hover { background: var(--color-background-secondary); }
+  .node-row.active { background: var(--color-background-info); }
+  .children { overflow: hidden; transition: max-height .2s ease; }
+  .children.collapsed { max-height: 0; }
+  .icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+  .toggle { width: 14px; flex-shrink: 0; color: var(--color-text-tertiary); font-size: 10px; transition: transform .15s; }
+  .toggle.open { transform: rotate(90deg); }
+  .name { font-weight: 500; color: var(--color-text-primary); }
+  .name.file { font-weight: 400; color: var(--color-text-secondary); }
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; margin-left: 4px; }
+  .badge-django { background: var(--color-background-success); color: var(--color-text-success); }
+  .badge-react  { background: var(--color-background-info);    color: var(--color-text-info); }
+  .badge-infra  { background: var(--color-background-warning);  color: var(--color-text-warning); }
+  .badge-ai     { background: var(--color-background-danger);   color: var(--color-text-danger); }
+  .badge-test   { background: var(--color-background-secondary);color: var(--color-text-secondary); }
+
+  .detail-panel { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); padding: 1rem 1.25rem; margin-top: 1rem; min-height: 80px; transition: opacity .2s; }
+  .detail-panel h3 { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 6px; font-family: var(--font-mono); }
+  .detail-panel p  { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; font-family: var(--font-sans); }
+  .detail-panel .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .detail-panel .tag { font-size: 11px; font-family: var(--font-mono); padding: 2px 8px; border-radius: 4px; background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-secondary); }
+
+  .toolbar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .toolbar button { font-size: 12px; padding: 4px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+  .toolbar button:hover { background: var(--color-background-secondary); }
+
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text-secondary); }
+</style>
+
+<div style="padding: 0.5rem 0">
+  <div class="legend">
+    <div class="legend-item"><span class="badge badge-django">Django</span> backend</div>
+    <div class="legend-item"><span class="badge badge-react">React</span> frontend</div>
+    <div class="legend-item"><span class="badge badge-infra">Infra</span> devops</div>
+    <div class="legend-item"><span class="badge badge-ai">AI</span> calling/stt</div>
+    <div class="legend-item"><span class="badge badge-test">test</span> testing</div>
+  </div>
+  <div class="toolbar">
+    <button onclick="expandAll()">Expand all</button>
+    <button onclick="collapseAll()">Collapse all</button>
+  </div>
+  <div class="tree" id="tree"></div>
+  <div class="detail-panel" id="detail">
+    <h3>Click any file or folder to see details</h3>
+    <p>The MediSched AI project follows a clean monorepo structure with separate <code>/backend</code> (Django) and <code>/frontend</code> (React) directories, plus shared infra config at the root.</p>
+  </div>
+</div>
+
+<script>
+const INFO = {
+  "medischedai/": { desc: "Root monorepo for MediSched AI. Contains backend, frontend, and shared DevOps config.", tags: ["monorepo", "docker-compose", "git"] },
+  "backend/": { desc: "Django REST Framework backend. Organized into modular apps matching each PRISM-R module.", tags: ["Django 5.x", "Python", "PostgreSQL", "Celery"] },
+  "backend/manage.py": { desc: "Django management entry point. Used to run the dev server, migrations, and management commands.", tags: ["django", "cli"] },
+  "backend/requirements.txt": { desc: "Python dependencies: Django, djangorestframework, celery, redis, channels, psycopg2, twilio, openai-whisper, simple-jwt.", tags: ["pip", "deps"] },
+  "backend/config/": { desc: "Django project configuration directory — settings, URLs, ASGI/WSGI, and Celery config.", tags: ["Django", "settings"] },
+  "backend/config/settings/": { desc: "Split settings: base.py (shared), dev.py (local), prod.py (production with env vars).", tags: ["settings", "env"] },
+  "backend/config/settings/base.py": { desc: "Shared settings: INSTALLED_APPS, DATABASES (PostgreSQL), REST_FRAMEWORK, CORS, JWT config, CELERY_BROKER_URL.", tags: ["settings"] },
+  "backend/config/settings/dev.py": { desc: "Development overrides: DEBUG=True, local DB, no SSL, relaxed CORS.", tags: ["dev"] },
+  "backend/config/settings/prod.py": { desc: "Production settings: DEBUG=False, env-based secrets, S3 storage, secure headers.", tags: ["prod", "security"] },
+  "backend/config/urls.py": { desc: "Root URL router — mounts all app routers under /api/v1/ and serves DRF browsable API.", tags: ["urls", "routing"] },
+  "backend/config/asgi.py": { desc: "ASGI config for Django Channels — handles both HTTP and WebSocket connections.", tags: ["asgi", "websocket"] },
+  "backend/config/celery.py": { desc: "Celery app instance. Configures broker (Redis), beat schedule, and task autodiscovery.", tags: ["celery", "redis"] },
+  "backend/apps/": { desc: "All Django apps live here, one per PRISM-R module. Each has models, views, serializers, services, permissions, URLs.", tags: ["Django apps"] },
+  "backend/apps/patients/": { desc: "Patient Management module (FR-PM). Handles create, search, update, duplicate detection. Central entity for all interactions.", tags: ["FR-PM", "patients"] },
+  "backend/apps/patients/models.py": { desc: "Patient model: name, phone (unique), DOB, gender, email, address, medical_notes, referring_doctor, timestamps.", tags: ["model", "PostgreSQL"] },
+  "backend/apps/patients/serializers.py": { desc: "DRF serializers with validation — required fields, phone uniqueness, nested appointment/call history on detail view.", tags: ["DRF", "validation"] },
+  "backend/apps/patients/views.py": { desc: "ModelViewSet for CRUD + search. Filtered by name/phone. Role-based permission classes applied.", tags: ["viewset", "RBAC"] },
+  "backend/apps/patients/urls.py": { desc: "Router: /api/v1/patients/ (list/create) and /api/v1/patients/{id}/ (retrieve/update).", tags: ["urls"] },
+  "backend/apps/doctors/": { desc: "Doctor Management module (FR-DM). Admin creates/deactivates profiles. Doctors edit their own info only.", tags: ["FR-DM", "doctors"] },
+  "backend/apps/doctors/models.py": { desc: "Doctor model: name, specialization, phone, email, is_active. Inactive doctors hidden from calendar.", tags: ["model"] },
+  "backend/apps/slots/": { desc: "Doctor Slot Management (FR-DS). Auto-generates slots from time range + duration. Conflict detection, status management.", tags: ["FR-DS", "slots"] },
+  "backend/apps/slots/models.py": { desc: "DoctorSlot model: doctor FK, date, start_time, end_time, duration (30/60), status (Available/Booked/Blocked), patient FK (if booked).", tags: ["model", "slots"] },
+  "backend/apps/slots/services.py": { desc: "Slot generation logic: accepts (doctor, date, start, end, duration) and bulk-creates DoctorSlot objects. Overlap detection via queryset.", tags: ["service", "business-logic"] },
+  "backend/apps/calendar_view/": { desc: "Calendar Management (FR-CM). API endpoints for slot fetching with filters. Django Channels consumer for real-time WebSocket updates.", tags: ["FR-CM", "websocket"] },
+  "backend/apps/calendar_view/consumers.py": { desc: "Django Channels WebSocket consumer. Broadcasts slot-change events to all connected React clients via Redis channel layer.", tags: ["channels", "redis", "realtime"] },
+  "backend/apps/appointments/": { desc: "Appointment Scheduling (FR-CM-03/04). Links patients to slots. Conflict detection with select_for_update() locking.", tags: ["FR-CM", "appointments"] },
+  "backend/apps/appointments/models.py": { desc: "Appointment model: patient FK, slot FK, booking_source (manual/AI), status (confirmed/cancelled/noshow), reminder_status, timestamps.", tags: ["model"] },
+  "backend/apps/calling/": { desc: "Automated Outbound Calling (FR-AC). Twilio integration, 3-attempt escalation, IVR webhook handlers.", tags: ["FR-AC", "twilio", "AI"] },
+  "backend/apps/calling/tasks.py": { desc: "Celery task call_patient.delay(). Handles 3-attempt escalation with ETA scheduling (2-hour retry). Logs every attempt to CallLog.", tags: ["celery", "twilio", "task"] },
+  "backend/apps/calling/webhooks.py": { desc: "TwiML webhook endpoints for IVR — handles patient DTMF responses, fetches available slots, confirms booking during call.", tags: ["twilio", "twiml", "webhook"] },
+  "backend/apps/calling/models.py": { desc: "CallLog model: patient FK, appointment FK, attempt_number, duration, outcome, timestamps. ManualCallbackTask for escalation.", tags: ["model", "calllog"] },
+  "backend/apps/transcription/": { desc: "Call Documentation & Transcription (FR-CD). Celery worker downloads recording, calls Whisper API, stores transcription text.", tags: ["FR-CD", "whisper", "STT"] },
+  "backend/apps/transcription/tasks.py": { desc: "Celery task transcribe_call.delay(call_log_id). Downloads Twilio recording → Whisper API → stores in Transcription model.", tags: ["celery", "whisper", "async"] },
+  "backend/apps/transcription/models.py": { desc: "Transcription model: call_log FK, appointment FK, text, transcription_status, last_edited_by. Supports staff edits.", tags: ["model"] },
+  "backend/apps/reminders/": { desc: "Automated Reminders (FR-RM). Celery Beat checks upcoming appointments. Sends SMS (Twilio) and email. Logs delivery status.", tags: ["FR-RM", "celery-beat", "SMS"] },
+  "backend/apps/reminders/tasks.py": { desc: "check_upcoming_appointments() runs hourly via Celery Beat. For appointments in 24h window, dispatches send_reminder.delay(). Retries on failure.", tags: ["celery", "beat", "reminder"] },
+  "backend/apps/reminders/models.py": { desc: "ReminderLog model: patient FK, appointment FK, channel (SMS/email), send_timestamp, delivery_status, retry_count.", tags: ["model"] },
+  "backend/apps/analytics/": { desc: "Analytics & Reporting (FR-AN). Aggregate queries using Django ORM. Filterable by date, doctor, service. CSV export.", tags: ["FR-AN", "analytics", "CSV"] },
+  "backend/apps/analytics/views.py": { desc: "DRF endpoints with Django ORM aggregates (Count, Avg, F). Filterable by date range, doctor. StreamingHttpResponse for CSV.", tags: ["DRF", "analytics"] },
+  "backend/apps/users/": { desc: "User Management & RBAC (FR-UA). 4 roles: Admin, Staff, Doctor, Read-only. JWT auth via Simple JWT.", tags: ["FR-UA", "RBAC", "JWT"] },
+  "backend/apps/users/permissions.py": { desc: "Custom DRF permission classes: IsAdmin, IsStaff, IsDoctor, IsReadOnly. Applied per viewset action. Returns HTTP 403 on deny.", tags: ["RBAC", "permissions"] },
+  "backend/tests/": { desc: "Backend test suite — unit tests per app, integration tests for API flows, E2E for full booking workflow.", tags: ["pytest", "testing"] },
+  "frontend/": { desc: "React SPA (Vite build). Communicates with Django via REST + WebSocket. Covers all staff/doctor UI views.", tags: ["React", "Vite", "JavaScript"] },
+  "frontend/src/": { desc: "React source tree: pages, components, hooks, services, store, and WebSocket layer.", tags: ["React src"] },
+  "frontend/src/pages/": { desc: "Top-level page components routed via React Router: Dashboard, Patients, Doctors, Calendar, Calls, Analytics.", tags: ["React Router", "pages"] },
+  "frontend/src/pages/Calendar.jsx": { desc: "FullCalendar integration. Fetches slots from DRF. Connects to WebSocket for live updates. Color-coded slot status (green/blue/grey).", tags: ["FullCalendar", "WebSocket", "realtime"] },
+  "frontend/src/pages/Patients.jsx": { desc: "Patient list with search. Create/edit patient form. Duplicate phone warning. Appointment history sidebar.", tags: ["patients", "form"] },
+  "frontend/src/pages/Analytics.jsx": { desc: "Analytics dashboard. Charts for utilization, call success, no-shows. Date/doctor filters. CSV export button.", tags: ["analytics", "charts"] },
+  "frontend/src/components/": { desc: "Reusable UI components: PatientForm, SlotGenerator, BookingModal, CallLogTable, ReminderStatus, RBAC-gated NavItem.", tags: ["components", "UI"] },
+  "frontend/src/hooks/": { desc: "Custom React hooks: useAuth, usePatients, useSlots, useCalendar, useWebSocket (wraps Django Channels connection).", tags: ["hooks", "React Query"] },
+  "frontend/src/services/": { desc: "Axios API client modules per domain: patientApi, slotApi, appointmentApi, callApi, analyticsApi. Token injection middleware.", tags: ["axios", "API client"] },
+  "frontend/src/store/": { desc: "Auth state (JWT tokens, user role, refresh logic). Minimal — server state via React Query, not Redux.", tags: ["state", "JWT"] },
+  "frontend/src/websocket/": { desc: "WebSocket client: connects to Django Channels. Dispatches slot-change events to Calendar. Auto-reconnect with exponential backoff.", tags: ["WebSocket", "channels"] },
+  "docker-compose.yml": { desc: "5-service stack: react-frontend, django-api, celery-worker, postgresql, redis. Single file manages full local + staging env.", tags: ["Docker", "infra"] },
+  "docker-compose.prod.yml": { desc: "Production overrides: no volume mounts, env from secrets, health checks, restart policies.", tags: ["Docker", "prod"] },
+  ".env.example": { desc: "Template for all environment variables: DATABASE_URL, REDIS_URL, TWILIO_*, OPENAI_API_KEY, SECRET_KEY, JWT_SECRET.", tags: ["env", "secrets"] },
+  "Makefile": { desc: "Shortcut commands: make dev, make migrate, make test, make build, make shell. Wraps docker-compose for DX.", tags: ["Makefile", "DX"] },
+  "README.md": { desc: "Project overview, setup steps, architecture notes, API docs pointer, and PRISM phase summaries.", tags: ["docs"] },
+};
+
+const TREE = {
+  name: "medischedai/", icon: "📦", badge: null, open: true, children: [
+    { name: "backend/", icon: "🐍", badge: "django", open: true, children: [
+      { name: "manage.py", icon: "⚙️" },
+      { name: "requirements.txt", icon: "📋" },
+      { name: "config/", icon: "🔧", badge: "django", open: true, children: [
+        { name: "settings/", icon: "📁", open: false, children: [
+          { name: "base.py", icon: "📄" },
+          { name: "dev.py",  icon: "📄" },
+          { name: "prod.py", icon: "📄" },
+        ]},
+        { name: "urls.py",   icon: "🔀" },
+        { name: "asgi.py",   icon: "🔌" },
+        { name: "celery.py", icon: "⚡" },
+      ]},
+      { name: "apps/", icon: "📁", open: true, children: [
+        { name: "patients/", icon: "👤", badge: "django", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "views.py", icon: "👁️" },
+          { name: "urls.py", icon: "🔀" },
+          { name: "permissions.py", icon: "🔒" },
+          { name: "admin.py", icon: "⚙️" },
+        ]},
+        { name: "doctors/", icon: "🩺", badge: "django", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "views.py", icon: "👁️" },
+          { name: "urls.py", icon: "🔀" },
+        ]},
+        { name: "slots/", icon: "📅", badge: "django", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "services.py", icon: "⚙️" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "views.py", icon: "👁️" },
+          { name: "urls.py", icon: "🔀" },
+        ]},
+        { name: "calendar_view/", icon: "🗓️", badge: "django", open: false, children: [
+          { name: "views.py", icon: "👁️" },
+          { name: "consumers.py", icon: "🔌" },
+          { name: "routing.py", icon: "🔀" },
+        ]},
+        { name: "appointments/", icon: "✅", badge: "django", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "views.py", icon: "👁️" },
+          { name: "urls.py", icon: "🔀" },
+        ]},
+        { name: "calling/", icon: "📞", badge: "ai", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "tasks.py", icon: "⚡" },
+          { name: "webhooks.py", icon: "🪝" },
+          { name: "services.py", icon: "⚙️" },
+          { name: "urls.py", icon: "🔀" },
+        ]},
+        { name: "transcription/", icon: "🎙️", badge: "ai", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "tasks.py", icon: "⚡" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "views.py", icon: "👁️" },
+        ]},
+        { name: "reminders/", icon: "🔔", badge: "django", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "tasks.py", icon: "⚡" },
+          { name: "services.py", icon: "⚙️" },
+        ]},
+        { name: "analytics/", icon: "📊", badge: "django", open: false, children: [
+          { name: "views.py", icon: "👁️" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "urls.py", icon: "🔀" },
+        ]},
+        { name: "users/", icon: "👥", badge: "django", open: false, children: [
+          { name: "models.py", icon: "🗃️" },
+          { name: "serializers.py", icon: "📝" },
+          { name: "views.py", icon: "👁️" },
+          { name: "permissions.py", icon: "🔒" },
+          { name: "urls.py", icon: "🔀" },
+        ]},
+      ]},
+      { name: "tests/", icon: "🧪", badge: "test", open: false, children: [
+        { name: "test_patients.py", icon: "🧪" },
+        { name: "test_slots.py", icon: "🧪" },
+        { name: "test_appointments.py", icon: "🧪" },
+        { name: "test_calling.py", icon: "🧪" },
+        { name: "test_rbac.py", icon: "🧪" },
+        { name: "test_e2e.py", icon: "🧪" },
+      ]},
+    ]},
+    { name: "frontend/", icon: "⚛️", badge: "react", open: true, children: [
+      { name: "package.json", icon: "📋" },
+      { name: "vite.config.js", icon: "⚡" },
+      { name: "src/", icon: "📁", open: true, children: [
+        { name: "main.jsx", icon: "📄" },
+        { name: "App.jsx", icon: "📄" },
+        { name: "pages/", icon: "📁", badge: "react", open: false, children: [
+          { name: "Dashboard.jsx", icon: "📊" },
+          { name: "Patients.jsx", icon: "👤" },
+          { name: "Doctors.jsx", icon: "🩺" },
+          { name: "Calendar.jsx", icon: "📅" },
+          { name: "CallLogs.jsx", icon: "📞" },
+          { name: "Analytics.jsx", icon: "📈" },
+          { name: "Login.jsx", icon: "🔑" },
+        ]},
+        { name: "components/", icon: "🧩", badge: "react", open: false, children: [
+          { name: "PatientForm.jsx", icon: "📝" },
+          { name: "SlotGenerator.jsx", icon: "⏱️" },
+          { name: "BookingModal.jsx", icon: "📋" },
+          { name: "CallLogTable.jsx", icon: "📞" },
+          { name: "ReminderStatus.jsx", icon: "🔔" },
+          { name: "NavItem.jsx", icon: "🔒" },
+        ]},
+        { name: "hooks/", icon: "🪝", open: false, children: [
+          { name: "useAuth.js", icon: "📄" },
+          { name: "usePatients.js", icon: "📄" },
+          { name: "useSlots.js", icon: "📄" },
+          { name: "useCalendar.js", icon: "📄" },
+          { name: "useWebSocket.js", icon: "📄" },
+        ]},
+        { name: "services/", icon: "🔧", open: false, children: [
+          { name: "patientApi.js", icon: "📄" },
+          { name: "slotApi.js", icon: "📄" },
+          { name: "appointmentApi.js", icon: "📄" },
+          { name: "callApi.js", icon: "📄" },
+          { name: "analyticsApi.js", icon: "📄" },
+          { name: "axiosClient.js", icon: "📄" },
+        ]},
+        { name: "store/", icon: "💾", open: false, children: [
+          { name: "authStore.js", icon: "📄" },
+        ]},
+        { name: "websocket/", icon: "🔌", open: false, children: [
+          { name: "calendarSocket.js", icon: "📄" },
+        ]},
+      ]},
+    ]},
+    { name: "docker-compose.yml",      icon: "🐳", badge: "infra" },
+    { name: "docker-compose.prod.yml", icon: "🐳", badge: "infra" },
+    { name: ".env.example",            icon: "🔑" },
+    { name: "Makefile",                icon: "🛠️" },
+    { name: "README.md",               icon: "📖" },
+  ]
+};
+
+let activeEl = null;
+
+function makeNode(node, depth) {
+  const div = document.createElement('div');
+  div.className = 'node';
+  const isDir = node.name.endsWith('/');
+  const row = document.createElement('div');
+  row.className = 'node-row';
+  row.style.paddingLeft = (depth * 16 + 6) + 'px';
+
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle';
+  if (isDir && node.children?.length) {
+    toggle.textContent = '▶';
+    if (node.open) toggle.classList.add('open');
+  } else {
+    toggle.style.visibility = 'hidden';
+  }
+
+  const icon = document.createElement('span');
+  icon.className = 'icon';
+  icon.textContent = node.icon || (isDir ? '📁' : '📄');
+
+  const name = document.createElement('span');
+  name.className = isDir ? 'name' : 'name file';
+  name.textContent = node.name;
+
+  row.appendChild(toggle);
+  row.appendChild(icon);
+  row.appendChild(name);
+
+  if (node.badge) {
+    const b = document.createElement('span');
+    b.className = 'badge badge-' + node.badge;
+    b.textContent = node.badge;
+    row.appendChild(b);
+  }
+
+  div.appendChild(row);
+
+  let childrenDiv = null;
+  if (isDir && node.children?.length) {
+    childrenDiv = document.createElement('div');
+    childrenDiv.className = 'children' + (node.open ? '' : ' collapsed');
+    node.children.forEach(c => childrenDiv.appendChild(makeNode(c, depth + 1)));
+    div.appendChild(childrenDiv);
+  }
+
+  const key = node.name;
+  row.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (activeEl) activeEl.classList.remove('active');
+    row.classList.add('active');
+    activeEl = row;
+
+    if (childrenDiv) {
+      const collapsed = childrenDiv.classList.toggle('collapsed');
+      toggle.classList.toggle('open', !collapsed);
+    }
+
+    const info = INFO[key] || INFO[key.replace('backend/', '').replace('frontend/src/', '')];
+    const panel = document.getElementById('detail');
+    if (info) {
+      panel.innerHTML = `<h3>${key}</h3><p>${info.desc}</p>
+        <div class="tags">${(info.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</div>`;
+    } else {
+      panel.innerHTML = `<h3>${key}</h3><p>Core project file. Click parent folders for context.</p>`;
+    }
+  });
+
+  div._childrenDiv = childrenDiv;
+  div._toggle = toggle;
+  return div;
+}
+
+function renderTree() {
+  const container = document.getElementById('tree');
+  container.innerHTML = '';
+  container.appendChild(makeNode(TREE, 0));
+}
+
+function expandAll() {
+  document.querySelectorAll('.children').forEach(c => c.classList.remove('collapsed'));
+  document.querySelectorAll('.toggle').forEach(t => t.classList.add('open'));
+}
+function collapseAll() {
+  document.querySelectorAll('.children').forEach(c => c.classList.add('collapsed'));
+  document.querySelectorAll('.toggle').forEach(t => t.classList.remove('open'));
+}
+
+renderTree();
+</script>
