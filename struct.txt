@@ -1,0 +1,139 @@
+# 📦 MediSched AI - Project Structure
+
+
+medischedai/
+├── backend/
+│ ├── manage.py
+│ ├── requirements.txt
+│ │
+│ ├── config/
+│ │ ├── settings/
+│ │ │ ├── base.py
+│ │ │ ├── dev.py
+│ │ │ └── prod.py
+│ │ ├── urls.py
+│ │ ├── asgi.py
+│ │ └── celery.py
+│ │
+│ ├── apps/
+│ │ ├── patients/
+│ │ │ ├── models.py
+│ │ │ ├── serializers.py
+│ │ │ ├── views.py
+│ │ │ ├── urls.py
+│ │ │ ├── permissions.py
+│ │ │ └── admin.py
+│ │ │
+│ │ ├── doctors/
+│ │ │ ├── models.py
+│ │ │ ├── serializers.py
+│ │ │ ├── views.py
+│ │ │ └── urls.py
+│ │ │
+│ │ ├── slots/
+│ │ │ ├── models.py
+│ │ │ ├── services.py
+│ │ │ ├── serializers.py
+│ │ │ ├── views.py
+│ │ │ └── urls.py
+│ │ │
+│ │ ├── calendar_view/
+│ │ │ ├── views.py
+│ │ │ ├── consumers.py
+│ │ │ └── routing.py
+│ │ │
+│ │ ├── appointments/
+│ │ │ ├── models.py
+│ │ │ ├── serializers.py
+│ │ │ ├── views.py
+│ │ │ └── urls.py
+│ │ │
+│ │ ├── calling/
+│ │ │ ├── models.py
+│ │ │ ├── tasks.py
+│ │ │ ├── webhooks.py
+│ │ │ ├── services.py
+│ │ │ └── urls.py
+│ │ │
+│ │ ├── transcription/
+│ │ │ ├── models.py
+│ │ │ ├── tasks.py
+│ │ │ ├── serializers.py
+│ │ │ └── views.py
+│ │ │
+│ │ ├── reminders/
+│ │ │ ├── models.py
+│ │ │ ├── tasks.py
+│ │ │ └── services.py
+│ │ │
+│ │ ├── analytics/
+│ │ │ ├── views.py
+│ │ │ ├── serializers.py
+│ │ │ └── urls.py
+│ │ │
+│ │ └── users/
+│ │ ├── models.py
+│ │ ├── serializers.py
+│ │ ├── views.py
+│ │ ├── permissions.py
+│ │ └── urls.py
+│ │
+│ └── tests/
+│ ├── test_patients.py
+│ ├── test_slots.py
+│ ├── test_appointments.py
+│ ├── test_calling.py
+│ ├── test_rbac.py
+│ └── test_e2e.py
+│
+├── frontend/
+│ ├── package.json
+│ ├── vite.config.js
+│ │
+│ └── src/
+│ ├── main.jsx
+│ ├── App.jsx
+│ │
+│ ├── pages/
+│ │ ├── Dashboard.jsx
+│ │ ├── Patients.jsx
+│ │ ├── Doctors.jsx
+│ │ ├── Calendar.jsx
+│ │ ├── CallLogs.jsx
+│ │ ├── Analytics.jsx
+│ │ └── Login.jsx
+│ │
+│ ├── components/
+│ │ ├── PatientForm.jsx
+│ │ ├── SlotGenerator.jsx
+│ │ ├── BookingModal.jsx
+│ │ ├── CallLogTable.jsx
+│ │ ├── ReminderStatus.jsx
+│ │ └── NavItem.jsx
+│ │
+│ ├── hooks/
+│ │ ├── useAuth.js
+│ │ ├── usePatients.js
+│ │ ├── useSlots.js
+│ │ ├── useCalendar.js
+│ │ └── useWebSocket.js
+│ │
+│ ├── services/
+│ │ ├── patientApi.js
+│ │ ├── slotApi.js
+│ │ ├── appointmentApi.js
+│ │ ├── callApi.js
+│ │ ├── analyticsApi.js
+│ │ └── axiosClient.js
+│ │
+│ ├── store/
+│ │ └── authStore.js
+│ │
+│ └── websocket/
+│ └── calendarSocket.js
+│
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── .env.example
+├── Makefile
+└── README.md
